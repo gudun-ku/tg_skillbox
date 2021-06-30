@@ -27,21 +27,6 @@ type bnResp struct {
 	Code  int64   `json:"code"`
 }
 
-// Kline define kline info
-type Kline struct {
-	OpenTime                 int64  `json:"openTime"`
-	Open                     string `json:"open"`
-	High                     string `json:"high"`
-	Low                      string `json:"low"`
-	Close                    string `json:"close"`
-	Volume                   string `json:"volume"`
-	CloseTime                int64  `json:"closeTime"`
-	QuoteAssetVolume         string `json:"quoteAssetVolume"`
-	TradeNum                 int64  `json:"tradeNum"`
-	TakerBuyBaseAssetVolume  string `json:"takerBuyBaseAssetVolume"`
-	TakerBuyQuoteAssetVolume string `json:"takerBuyQuoteAssetVolume"`
-}
-
 type wallet map[string]float64
 
 var db = map[int64]wallet{}
@@ -229,7 +214,7 @@ func getGraph(command []string, currency string, chatId int64, bot *tgbotapi.Bot
 		currencySuffix = "T"
 	}
 
-	apiUrl := fmt.Sprintf("https://api.binance.com/api/v3/klines?symbol=%s%s%s&interval=30m&startTime=%d", symbol, currency, currencySuffix, getLowestTime())
+	apiUrl := fmt.Sprintf("https://api.binance.com/api/v3/klines?symbol=%s%s%s&interval=15m&startTime=%d", symbol, currency, currencySuffix, getLowestTime())
 	resp, err := http.Get(apiUrl)
 	if err != nil {
 		log.Print(err)
@@ -259,18 +244,19 @@ func getGraph(command []string, currency string, chatId int64, bot *tgbotapi.Bot
 			return fmt.Errorf("invalid kline response")
 		}
 		// Time
-		res[i].T = float64(item.GetIndex(0).MustInt64())
+		res[i].T = float64(item.GetIndex(0).MustInt64() / 1000)
+
 		// Open
 		res[i].O, err = strconv.ParseFloat(item.GetIndex(1).MustString(), 64)
 		if err != nil {
 			return fmt.Errorf("invalid kline response")
 		}
-		// Highest
+		// High
 		res[i].H, err = strconv.ParseFloat(item.GetIndex(2).MustString(), 64)
 		if err != nil {
 			return fmt.Errorf("invalid kline response")
 		}
-		// Lowest
+		// Low
 		res[i].L, err = strconv.ParseFloat(item.GetIndex(3).MustString(), 64)
 		if err != nil {
 			return fmt.Errorf("invalid kline response")
@@ -292,7 +278,7 @@ func getGraph(command []string, currency string, chatId int64, bot *tgbotapi.Bot
 	p.Title.Text = symbol
 	p.X.Label.Text = "Time"
 	p.Y.Label.Text = fmt.Sprintf("Price, %s", currency)
-	p.X.Tick.Marker = plot.TimeTicks{Format: "2021-01-02\n15:04:05"}
+	p.X.Tick.Marker = plot.TimeTicks{Format: time.Kitchen}
 
 	bars, err := custplotter.NewCandlesticks(res)
 	if err != nil {
