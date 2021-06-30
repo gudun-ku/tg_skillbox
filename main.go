@@ -53,63 +53,96 @@ func main() {
 		}
 
 		command := strings.Split(update.Message.Text, " ")
+		chatId := update.Message.Chat.ID
 
 		switch command[0] {
 		case "ADD":
-			if len(command) != 3 {
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Incorrect command!"))
-			}
-			amount, err := strconv.ParseFloat(command[2], 64)
-			if err != nil {
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Incorrect command format!"))
-			}
-			if _, ok := db[update.Message.Chat.ID]; !ok {
-				db[update.Message.Chat.ID] = wallet{}
-			}
-
-			db[update.Message.Chat.ID][command[1]] += amount
-			balanceText := fmt.Sprintf("%s: balance is: %.4f", command[1], db[update.Message.Chat.ID][command[1]])
-			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Currency added! "+balanceText))
+			answer := addSymbol(command, update.Message.Chat.ID)
+			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, answer))
 		case "SUB":
-			if len(command) != 3 {
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Incorrect command!"))
-			}
-			amount, err := strconv.ParseFloat(command[2], 64)
-			if err != nil {
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Incorrect command format!"))
-			}
-			if _, ok := db[update.Message.Chat.ID]; !ok {
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Wallet doesn't contain symbol: %s!", command[1])))
-			}
-
-			db[update.Message.Chat.ID][command[1]] -= amount
-			balanceText := fmt.Sprintf("%s: balance is: %.4f", command[1], db[update.Message.Chat.ID][command[1]])
-			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Balance changed! "+balanceText))
+			answer := subSymbol(command, update.Message.Chat.ID)
+			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, answer))
 		case "DEL":
-			if len(command) != 2 {
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Incorrect command!"))
-			}
-
-			delete(db[update.Message.Chat.ID], command[1])
-			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Deleted: "+command[1]))
+			answer := deleteSymbol(command, chatId)
+			bot.Send(tgbotapi.NewMessage(chatId, answer))
 		case "SHOW":
-			msg := ""
-			var sumTotal float64
-
-			for key, amount := range db[update.Message.Chat.ID] {
-				price, _ := getPrice(key, currency)
-				sumTotal += amount * price
-				msg += fmt.Sprintf("%s: %.4f [%.2f %s]\n", key, amount, amount*price, currency)
-			}
-			msg += fmt.Sprintf("Total: %.2f %s", sumTotal, currency)
-			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
-
+			answer := showWallet(chatId)
+			bot.Send(tgbotapi.NewMessage(chatId, answer))
 		default:
-			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Команда не найдена!"))
+			bot.Send(tgbotapi.NewMessage(chatId, "Команда не найдена!"))
 		}
 
 	}
 
+}
+
+func addSymbol(command []string, chatId int64) (answer string) {
+
+	if len(command) != 3 {
+		return fmt.Sprintf("Incorrect command: %v", command)
+	}
+	amount, err := strconv.ParseFloat(command[2], 64)
+	if err != nil {
+		return fmt.Sprintf("Incorrect command format: %v", command[2])
+	}
+	if _, ok := db[chatId]; !ok {
+		db[chatId] = wallet{}
+	}
+
+	db[chatId][command[1]] += amount
+	balanceText := fmt.Sprintf("%s: balance is: %.4f", command[1], db[chatId][command[1]])
+	return "Currency added! " + balanceText
+}
+
+func subSymbol(command []string, chatId int64) (answer string) {
+
+	if len(command) != 3 {
+		return fmt.Sprintf("Incorrect command: %v", command)
+	}
+	amount, err := strconv.ParseFloat(command[2], 64)
+	if err != nil {
+		return fmt.Sprintf("Incorrect command format: %v", command[2])
+	}
+	if _, ok := db[chatId]; !ok {
+		return fmt.Sprintf("Wallet doesn't contain symbol: %s!", command[1])
+	}
+
+	curAmount := db[chatId][command[1]]
+	if curAmount > amount {
+		db[chatId][command[1]] -= amount
+		balanceText := fmt.Sprintf("%s: balance is: %.4f", command[1], db[chatId][command[1]])
+		return fmt.Sprintf("Change fixed: %s", balanceText)
+	} else if curAmount == amount {
+		delete(db[chatId], command[1])
+		return "Deleted: " + command[1]
+	} else {
+		return fmt.Sprintf("Not enough amout on account: %s", command[1])
+	}
+}
+
+func deleteSymbol(command []string, chatId int64) (answer string) {
+
+	if len(command) != 2 {
+		return fmt.Sprintf("Incorrect command: %v", command)
+	}
+
+	delete(db[chatId], command[1])
+	return fmt.Sprintf("Deleted: %s", command[1])
+}
+
+func showWallet(chatId int64) (answer string) {
+
+	msg := ""
+	var sumTotal float64
+
+	for key, amount := range db[chatId] {
+		price, _ := getPrice(key, currency)
+		sumTotal += amount * price
+		msg += fmt.Sprintf("%s: %.4f [%.2f %s]\n", key, amount, amount*price, currency)
+	}
+	msg += fmt.Sprintf("Total: %.2f %s", sumTotal, currency)
+
+	return msg
 }
 
 func getPrice(symbol string, currency string) (price float64, err error) {
