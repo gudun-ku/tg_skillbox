@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -128,7 +129,7 @@ func subSymbol(command []string, chatId int64) (answer string) {
 		delete(db[chatId], command[1])
 		return "Deleted: " + command[1]
 	} else {
-		return fmt.Sprintf("Not enough amout on account: %s", command[1])
+		return fmt.Sprintf("Not enough amount on account: %s", command[1])
 	}
 }
 
@@ -287,19 +288,20 @@ func getGraph(command []string, currency string, chatId int64, bot *tgbotapi.Bot
 
 	p.Add(bars)
 
-	// Saving graph to file, because I don't know how to work with plot bytes.
-	err = p.Save(900, 400, picFileName)
+	// Save plot to buffer, then sending to tg, now without saving picture to file.
+	writer, err := p.WriterTo(900, 400, "png")
 	if err != nil {
-		return fmt.Errorf("Error while saving plot")
+		return fmt.Errorf("Error while forming plot")
 	}
+	buf := bytes.NewBuffer([]byte{})
 
-	photoBytes, err := ioutil.ReadFile(picFileName)
+	_, err = writer.WriteTo(buf)
 	if err != nil {
 		return fmt.Errorf("Error while sending plot")
 	}
 	photoFileBytes := tgbotapi.FileBytes{
 		Name:  "candles Graph",
-		Bytes: photoBytes,
+		Bytes: buf.Bytes(),
 	}
 
 	_, err = bot.Send(tgbotapi.NewPhotoUpload(chatId, photoFileBytes))
